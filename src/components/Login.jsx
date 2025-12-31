@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { requestNotificationPermission } from '../utils/notifications'
 
@@ -14,17 +14,42 @@ const Login = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
+  const [isNewUser, setIsNewUser] = useState(false)
 
   // Listen for auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
+
+        // Check if user exists in Firestore
+        const userDocRef = doc(db, 'users', currentUser.uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (!userDoc.exists()) {
+          // New user - create user document
+          setIsNewUser(true)
+          await setDoc(userDocRef, {
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString()
+          })
+        } else {
+          // Returning user - update last login
+          setIsNewUser(false)
+          await setDoc(userDocRef, {
+            lastLoginAt: new Date().toISOString()
+          }, { merge: true })
+        }
+
         // Show notification prompt after successful login
         setShowNotificationPrompt(true)
       } else {
         setUser(null)
         setShowNotificationPrompt(false)
+        setIsNewUser(false)
       }
     })
 
@@ -65,9 +90,6 @@ const Login = () => {
         // Store the FCM token in Firestore
         await setDoc(doc(db, 'users', user.uid), {
           fcmToken: token,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
           notificationsEnabled: true,
           updatedAt: new Date().toISOString()
         }, { merge: true })
@@ -75,10 +97,14 @@ const Login = () => {
         setNotificationsEnabled(true)
         console.log('Notifications enabled, token stored:', token)
 
-        // Redirect to create group after a short delay
+        // Redirect based on user status
         setRedirecting(true)
         setTimeout(() => {
-          navigate('/create-group')
+          if (isNewUser) {
+            navigate('/welcome')
+          } else {
+            navigate('/dashboard')
+          }
         }, 1500)
       } else {
         setError('Unable to get notification permission. You can enable this later in settings.')
@@ -94,9 +120,13 @@ const Login = () => {
   const handleSkipNotifications = () => {
     setShowNotificationPrompt(false)
     setRedirecting(true)
-    // Redirect to create group after a short delay
+    // Redirect based on user status
     setTimeout(() => {
-      navigate('/create-group')
+      if (isNewUser) {
+        navigate('/welcome')
+      } else {
+        navigate('/dashboard')
+      }
     }, 800)
   }
 
@@ -195,16 +225,16 @@ const Login = () => {
               <div className="text-5xl mb-4">✨</div>
               <div>
                 <h2 className="text-xl font-bold text-gray-800 mb-2">
-                  Redirecting...
+                  {isNewUser ? 'Welcome!' : 'Welcome back!'}
                 </h2>
                 <p className="text-gray-600 text-sm">
-                  Setting up your group
+                  {isNewUser ? 'Setting up your account...' : 'Loading your groups...'}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Success Screen */}
+          {/* Success Screen - Only shown if user somehow doesn't get redirected */}
           {user && (!showNotificationPrompt || notificationsEnabled) && !redirecting && (
             <div className="text-center space-y-6">
               <div className="flex justify-center mb-4">
