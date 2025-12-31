@@ -40,16 +40,29 @@ const Login = () => {
             createdAt: new Date().toISOString(),
             lastLoginAt: new Date().toISOString()
           })
+          // Show notification prompt for new users
+          setShowNotificationPrompt(true)
         } else {
           // Returning user - update last login
           setIsNewUser(false)
+          const userData = userDoc.data()
           await setDoc(userDocRef, {
             lastLoginAt: new Date().toISOString()
           }, { merge: true })
-        }
 
-        // Show notification prompt after successful login
-        setShowNotificationPrompt(true)
+          // Check if user has already decided on notifications
+          if (userData.notificationConsent !== undefined && userData.notificationConsent !== null) {
+            // User already decided - skip prompt and redirect
+            setShowNotificationPrompt(false)
+            setRedirecting(true)
+            setTimeout(() => {
+              navigate('/dashboard')
+            }, 800)
+          } else {
+            // User hasn't decided yet - show prompt
+            setShowNotificationPrompt(true)
+          }
+        }
       } else {
         setUser(null)
         setShowNotificationPrompt(false)
@@ -58,7 +71,7 @@ const Login = () => {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [navigate])
 
   const handleGoogleSignIn = async () => {
     setError('')
@@ -91,20 +104,35 @@ const Login = () => {
       const token = await requestNotificationPermission()
 
       if (token && user) {
-        // Store the FCM token in Firestore
+        // Store the FCM token and consent in Firestore
         await setDoc(doc(db, 'users', user.uid), {
           fcmToken: token,
           notificationsEnabled: true,
+          notificationConsent: true,
           updatedAt: new Date().toISOString()
         }, { merge: true })
 
         setNotificationsEnabled(true)
         console.log('Notifications enabled, token stored:', token)
       } else {
+        // User denied or permission unavailable - still save consent as true (they tried)
+        await setDoc(doc(db, 'users', user.uid), {
+          notificationConsent: true,
+          notificationsEnabled: false,
+          updatedAt: new Date().toISOString()
+        }, { merge: true })
         console.log('Notification permission denied or unavailable')
       }
     } catch (err) {
       console.error('Error enabling notifications:', err)
+      // Still save that they consented to try
+      if (user) {
+        await setDoc(doc(db, 'users', user.uid), {
+          notificationConsent: true,
+          notificationsEnabled: false,
+          updatedAt: new Date().toISOString()
+        }, { merge: true })
+      }
     } finally {
       setNotificationLoading(false)
     }
@@ -120,8 +148,18 @@ const Login = () => {
     }, 1200)
   }
 
-  const handleSkipNotifications = () => {
+  const handleSkipNotifications = async () => {
     setShowNotificationPrompt(false)
+
+    // Save that user declined notifications
+    if (user) {
+      await setDoc(doc(db, 'users', user.uid), {
+        notificationConsent: false,
+        notificationsEnabled: false,
+        updatedAt: new Date().toISOString()
+      }, { merge: true })
+    }
+
     setRedirecting(true)
     // Redirect based on user status
     setTimeout(() => {
