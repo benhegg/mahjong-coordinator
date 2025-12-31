@@ -53,18 +53,27 @@ const Login = () => {
             lastLoginAt: new Date().toISOString()
           }, { merge: true })
 
+          // Migrate old data structure if needed
+          if (userData.notificationsEnabled === true && userData.notificationConsent === undefined) {
+            console.log('Migrating old notification data...')
+            await setDoc(userDocRef, {
+              notificationConsent: true
+            }, { merge: true })
+            // Update local userData
+            userData.notificationConsent = true
+          }
+
           // Sync local state with Firestore data
           if (userData.notificationsEnabled) {
             setNotificationsEnabled(true)
           }
 
-          // Check if user has already decided on notifications
-          const hasDecided = userData.notificationConsent !== undefined && userData.notificationConsent !== null
-          const hasEnabledOld = userData.notificationsEnabled === true
+          // Check if user has already made a decision about notifications
+          const hasDecided = userData.notificationConsent === true || userData.notificationConsent === false
 
-          console.log('Auth check:', { hasDecided, hasEnabledOld, userData })
+          console.log('Auth check:', { hasDecided, userData })
 
-          if (hasDecided || hasEnabledOld) {
+          if (hasDecided) {
             // User already decided - redirect immediately
             console.log('Redirecting to dashboard...')
             setRedirecting(true)
