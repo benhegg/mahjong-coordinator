@@ -62,16 +62,17 @@ const Login = () => {
           const hasDecided = userData.notificationConsent !== undefined && userData.notificationConsent !== null
           const hasEnabledOld = userData.notificationsEnabled === true
 
+          console.log('Auth check:', { hasDecided, hasEnabledOld, userData })
+
           if (hasDecided || hasEnabledOld) {
-            // User already decided - skip prompt and redirect immediately
-            setShowNotificationPrompt(false)
+            // User already decided - redirect immediately
+            console.log('Redirecting to dashboard...')
             setRedirecting(true)
             setCheckingAuth(false)
-            setTimeout(() => {
-              navigate('/dashboard')
-            }, 500)
+            navigate('/dashboard', { replace: true })
           } else {
             // User hasn't decided yet - show prompt
+            console.log('Showing notification prompt')
             setShowNotificationPrompt(true)
             setCheckingAuth(false)
           }
@@ -256,7 +257,15 @@ const Login = () => {
             </div>
           )}
 
-          {/* Success Screen - Fallback only, should not normally show */}
+          {/* Loading state during auth check */}
+          {user && checkingAuth && (
+            <div className="text-center py-12">
+              <div className="text-5xl mb-4">✨</div>
+              <p className="text-gray-600">Loading...</p>
+            </div>
+          )}
+
+          {/* Success Screen - Should rarely show, only for edge cases */}
           {user && !checkingAuth && !showNotificationPrompt && !redirecting && (
             <div className="text-center space-y-6">
               <div className="flex justify-center mb-4">
