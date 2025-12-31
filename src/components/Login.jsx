@@ -51,7 +51,11 @@ const Login = () => {
           }, { merge: true })
 
           // Check if user has already decided on notifications
-          if (userData.notificationConsent !== undefined && userData.notificationConsent !== null) {
+          // Also check old field (notificationsEnabled) for backwards compatibility
+          const hasDecided = userData.notificationConsent !== undefined && userData.notificationConsent !== null
+          const hasEnabledOld = userData.notificationsEnabled === true
+
+          if (hasDecided || hasEnabledOld) {
             // User already decided - skip prompt and redirect
             setShowNotificationPrompt(false)
             setRedirecting(true)
