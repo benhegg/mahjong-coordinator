@@ -4,6 +4,10 @@ import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebas
 import { doc, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { requestNotificationPermission } from '../utils/notifications'
+import NotificationPrompt from './common/NotificationPrompt'
+import PageHeader from './common/PageHeader'
+import Card from './common/Card'
+import ErrorMessage from './common/ErrorMessage'
 
 const Login = () => {
   const navigate = useNavigate()
@@ -96,25 +100,24 @@ const Login = () => {
 
         setNotificationsEnabled(true)
         console.log('Notifications enabled, token stored:', token)
-
-        // Redirect based on user status
-        setRedirecting(true)
-        setTimeout(() => {
-          if (isNewUser) {
-            navigate('/welcome')
-          } else {
-            navigate('/dashboard')
-          }
-        }, 1500)
       } else {
-        setError('Unable to get notification permission. You can enable this later in settings.')
+        console.log('Notification permission denied or unavailable')
       }
     } catch (err) {
       console.error('Error enabling notifications:', err)
-      setError('Failed to enable notifications. You can try again later.')
     } finally {
       setNotificationLoading(false)
     }
+
+    // Always redirect, even if notifications failed
+    setRedirecting(true)
+    setTimeout(() => {
+      if (isNewUser) {
+        navigate('/welcome')
+      } else {
+        navigate('/dashboard')
+      }
+    }, 1200)
   }
 
   const handleSkipNotifications = () => {
@@ -130,31 +133,25 @@ const Login = () => {
     }, 800)
   }
 
+  const getSubtitle = () => {
+    if (!user) return 'Coordinate games with your group'
+    if (showNotificationPrompt) return 'One more thing...'
+    return 'Welcome back!'
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="text-6xl mb-4">🀄</div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              Mahjong Night
-            </h1>
-            <p className="text-gray-600">
-              {!user && 'Coordinate games with your group'}
-              {user && !showNotificationPrompt && 'Welcome back!'}
-              {user && showNotificationPrompt && 'One more thing...'}
-            </p>
-          </div>
+        <Card>
+          <PageHeader
+            title="Mahjong Night"
+            subtitle={getSubtitle()}
+          />
 
           {/* Login Screen */}
           {!user && (
             <div className="space-y-6">
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
+              <ErrorMessage message={error} onDismiss={() => setError('')} />
 
               <button
                 onClick={handleGoogleSignIn}
@@ -184,39 +181,12 @@ const Login = () => {
 
           {/* Notification Permission Prompt */}
           {user && showNotificationPrompt && !notificationsEnabled && !redirecting && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="text-5xl mb-4">🔔</div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
-                  Enable Notifications
-                </h2>
-                <p className="text-gray-600 text-sm mb-6">
-                  Get notified when games need players
-                </p>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <button
-                  onClick={handleEnableNotifications}
-                  disabled={notificationLoading}
-                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold py-3 px-6 rounded-lg hover:from-pink-600 hover:to-rose-600 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {notificationLoading ? 'Enabling...' : 'Enable Notifications'}
-                </button>
-                <button
-                  onClick={handleSkipNotifications}
-                  className="w-full bg-gray-100 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-200 transition duration-200"
-                >
-                  Maybe Later
-                </button>
-              </div>
-            </div>
+            <NotificationPrompt
+              onEnable={handleEnableNotifications}
+              onSkip={handleSkipNotifications}
+              loading={notificationLoading}
+              error={error}
+            />
           )}
 
           {/* Redirecting state */}
@@ -279,7 +249,7 @@ const Login = () => {
               </button>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Footer */}
         <p className="text-center mt-6 text-sm text-gray-600">
