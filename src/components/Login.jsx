@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { requestNotificationPermission } from '../utils/notifications'
 
 const Login = () => {
+  const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
 
   // Listen for auth state changes
   useEffect(() => {
@@ -71,6 +74,12 @@ const Login = () => {
 
         setNotificationsEnabled(true)
         console.log('Notifications enabled, token stored:', token)
+
+        // Redirect to create group after a short delay
+        setRedirecting(true)
+        setTimeout(() => {
+          navigate('/create-group')
+        }, 1500)
       } else {
         setError('Unable to get notification permission. You can enable this later in settings.')
       }
@@ -84,6 +93,11 @@ const Login = () => {
 
   const handleSkipNotifications = () => {
     setShowNotificationPrompt(false)
+    setRedirecting(true)
+    // Redirect to create group after a short delay
+    setTimeout(() => {
+      navigate('/create-group')
+    }, 800)
   }
 
   return (
@@ -139,7 +153,7 @@ const Login = () => {
           )}
 
           {/* Notification Permission Prompt */}
-          {user && showNotificationPrompt && !notificationsEnabled && (
+          {user && showNotificationPrompt && !notificationsEnabled && !redirecting && (
             <div className="space-y-6">
               <div className="text-center">
                 <div className="text-5xl mb-4">🔔</div>
@@ -175,8 +189,23 @@ const Login = () => {
             </div>
           )}
 
+          {/* Redirecting state */}
+          {user && redirecting && (
+            <div className="text-center space-y-6">
+              <div className="text-5xl mb-4">✨</div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                  Redirecting...
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Setting up your group
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Success Screen */}
-          {user && (!showNotificationPrompt || notificationsEnabled) && (
+          {user && (!showNotificationPrompt || notificationsEnabled) && !redirecting && (
             <div className="text-center space-y-6">
               <div className="flex justify-center mb-4">
                 {user.photoURL ? (
