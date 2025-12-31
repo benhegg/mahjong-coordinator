@@ -19,10 +19,12 @@ const Login = () => {
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [isNewUser, setIsNewUser] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setCheckingAuth(true)
       if (currentUser) {
         setUser(currentUser)
 
@@ -42,6 +44,7 @@ const Login = () => {
           })
           // Show notification prompt for new users
           setShowNotificationPrompt(true)
+          setCheckingAuth(false)
         } else {
           // Returning user - update last login
           setIsNewUser(false)
@@ -50,27 +53,34 @@ const Login = () => {
             lastLoginAt: new Date().toISOString()
           }, { merge: true })
 
+          // Sync local state with Firestore data
+          if (userData.notificationsEnabled) {
+            setNotificationsEnabled(true)
+          }
+
           // Check if user has already decided on notifications
-          // Also check old field (notificationsEnabled) for backwards compatibility
           const hasDecided = userData.notificationConsent !== undefined && userData.notificationConsent !== null
           const hasEnabledOld = userData.notificationsEnabled === true
 
           if (hasDecided || hasEnabledOld) {
-            // User already decided - skip prompt and redirect
+            // User already decided - skip prompt and redirect immediately
             setShowNotificationPrompt(false)
             setRedirecting(true)
+            setCheckingAuth(false)
             setTimeout(() => {
               navigate('/dashboard')
-            }, 800)
+            }, 500)
           } else {
             // User hasn't decided yet - show prompt
             setShowNotificationPrompt(true)
+            setCheckingAuth(false)
           }
         }
       } else {
         setUser(null)
         setShowNotificationPrompt(false)
         setIsNewUser(false)
+        setCheckingAuth(false)
       }
     })
 
@@ -246,8 +256,8 @@ const Login = () => {
             </div>
           )}
 
-          {/* Success Screen - Only shown if user somehow doesn't get redirected */}
-          {user && (!showNotificationPrompt || notificationsEnabled) && !redirecting && (
+          {/* Success Screen - Fallback only, should not normally show */}
+          {user && !checkingAuth && !showNotificationPrompt && !redirecting && (
             <div className="text-center space-y-6">
               <div className="flex justify-center mb-4">
                 {user.photoURL ? (
