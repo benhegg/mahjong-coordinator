@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { requestNotificationPermission } from '../utils/notifications'
-import PageHeader from './common/PageHeader'
-import Card from './common/Card'
+import { useToast } from './common/Toast'
+import { PageHeader, Card, ErrorMessage, Button } from './common'
 
+/**
+ * ProfileSetup - Initial profile creation form for new users
+ * Collects name and optional address, requests notification permissions
+ */
 const ProfileSetup = () => {
   const navigate = useNavigate()
+  const toast = useToast()
   const user = auth.currentUser
 
   const [name, setName] = useState(user?.displayName || '')
@@ -15,11 +20,26 @@ const ProfileSetup = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = async (e) => {
+  const handleNameChange = useCallback((e) => {
+    setName(e.target.value)
+    if (error) setError('')
+  }, [error])
+
+  const handleAddressChange = useCallback((e) => {
+    setAddress(e.target.value)
+  }, [])
+
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
 
-    if (!name.trim()) {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
       setError('Name is required')
+      return
+    }
+
+    if (trimmedName.length < 2) {
+      setError('Name must be at least 2 characters')
       return
     }
 
@@ -28,36 +48,53 @@ const ProfileSetup = () => {
 
     try {
       // Request notification permission (don't block if denied)
-      const notificationToken = await requestNotificationPermission()
+      let notificationToken = null
+      try {
+        notificationToken = await requestNotificationPermission()
+      } catch (notifError) {
+        console.warn('Notification permission not granted:', notifError)
+      }
 
       // Save user profile to Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
-        name: name.trim(),
+        name: trimmedName,
         address: address.trim() || null,
         notification_token: notificationToken || null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
+
+      toast.success('Profile created successfully!')
 
       // Check for pending invite in localStorage
       const pendingInvite = localStorage.getItem('pendingInvite')
 
       if (pendingInvite) {
-        // Auto-join group and redirect
         localStorage.removeItem('pendingInvite')
-        // TODO: Join group logic will be added when we connect Firestore
-        navigate(`/group/${pendingInvite}`)
+        navigate(`/join/${pendingInvite}`, { replace: true })
       } else {
-        // No invite - go to welcome page
-        navigate('/welcome')
+        navigate('/welcome', { replace: true })
       }
     } catch (err) {
       console.error('Error saving profile:', err)
-      setError('Failed to save profile. Please try again.')
+
+      // Provide specific error messages
+      if (err.code === 'permission-denied') {
+        setError('Permission denied. Please try signing out and back in.')
+      } else if (err.code === 'unavailable') {
+        setError('Service temporarily unavailable. Please try again.')
+      } else {
+        setError('Failed to save profile. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [name, address, user, navigate, toast])
+
+  const handleDismissError = useCallback(() => {
+    setError('')
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center px-4">
@@ -71,23 +108,23 @@ const ProfileSetup = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
+              <ErrorMessage message={error} onDismiss={handleDismissError} />
             )}
 
             <div>
               <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
-                Name *
+                Name <span className="text-pink-500">*</span>
               </label>
               <input
                 type="text"
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none"
+                onChange={handleNameChange}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none transition-colors min-h-[44px]"
                 placeholder="Your name"
                 required
+                autoComplete="name"
+                maxLength={100}
               />
             </div>
 
@@ -99,22 +136,25 @@ const ProfileSetup = () => {
                 type="text"
                 id="address"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none"
+                onChange={handleAddressChange}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none transition-colors min-h-[44px]"
                 placeholder="123 Main St, Apt 4B"
+                autoComplete="street-address"
+                maxLength={200}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Only needed if you plan to host games
+              <p className="text-xs text-gray-500 mt-2">
+                Only needed if you plan to host games at your place
               </p>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold py-3 px-6 rounded-lg hover:from-pink-600 hover:to-rose-600 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={loading}
+              fullWidth
+              size="lg"
             >
               {loading ? 'Saving...' : 'Continue'}
-            </button>
+            </Button>
           </form>
         </Card>
       </div>
@@ -122,4 +162,4 @@ const ProfileSetup = () => {
   )
 }
 
-export default ProfileSetup
+export default memo(ProfileSetup)

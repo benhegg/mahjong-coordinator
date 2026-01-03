@@ -1,18 +1,45 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import PageHeader from './common/PageHeader'
-import Card from './common/Card'
+import { useState, useCallback, memo } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useUserGroups } from '../hooks/useGroups'
+import { useToast } from './common/Toast'
+import { PageHeader, Card, ErrorMessage, Button } from './common'
 
+/**
+ * Welcome - Entry point for users without groups
+ * Allows joining via invite code or creating a new group
+ */
 const Welcome = () => {
   const navigate = useNavigate()
-  const [showJoinModal, setShowJoinModal] = useState(false)
-  const [inviteLink, setInviteLink] = useState('')
+  const { code: inviteCodeFromUrl } = useParams()
+  const { joinGroup } = useUserGroups()
+  const toast = useToast()
+
+  const [showJoinModal, setShowJoinModal] = useState(!!inviteCodeFromUrl)
+  const [inviteLink, setInviteLink] = useState(inviteCodeFromUrl || '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleJoinGroup = async () => {
-    if (!inviteLink.trim()) {
-      setError('Please enter an invite link')
+  const handleOpenJoinModal = useCallback(() => {
+    setShowJoinModal(true)
+    setError('')
+  }, [])
+
+  const handleCloseJoinModal = useCallback(() => {
+    setShowJoinModal(false)
+    setInviteLink('')
+    setError('')
+  }, [])
+
+  const handleInviteLinkChange = useCallback((e) => {
+    setInviteLink(e.target.value)
+    if (error) setError('')
+  }, [error])
+
+  const handleJoinGroup = useCallback(async () => {
+    const trimmedLink = inviteLink.trim()
+
+    if (!trimmedLink) {
+      setError('Please enter an invite link or code')
       return
     }
 
@@ -21,30 +48,50 @@ const Welcome = () => {
 
     try {
       // Extract invite code from URL or use as-is if it's just a code
-      let inviteCode = inviteLink.trim()
+      let inviteCode = trimmedLink
 
-      // If it's a full URL, extract the code
+      // If it's a full URL, extract the code from the path
       if (inviteCode.includes('/')) {
         const parts = inviteCode.split('/')
         inviteCode = parts[parts.length - 1]
       }
 
-      if (!inviteCode || inviteCode.length < 6) {
-        setError('Invalid invite code')
+      // Remove any query parameters
+      inviteCode = inviteCode.split('?')[0]
+
+      if (!inviteCode || inviteCode.length < 4) {
+        setError('Invalid invite code. Please check the link and try again.')
         setLoading(false)
         return
       }
 
-      // TODO: Look up group by invite code in Firestore and join
-      // For now, navigate to a mock group
-      navigate(`/group/${inviteCode}`)
+      // Try to join the group
+      const result = await joinGroup(inviteCode)
+
+      if (result.success) {
+        toast.success('Successfully joined the group!')
+        navigate(`/group/${inviteCode}`, { replace: true })
+      } else {
+        setError(result.error || 'Failed to join group. Please check the invite link.')
+      }
     } catch (err) {
       console.error('Error joining group:', err)
-      setError('Failed to join group. Please check the invite link.')
+      setError('Failed to join group. Please check the invite link and try again.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [inviteLink, joinGroup, navigate, toast])
+
+  const handleCreateGroup = useCallback(() => {
+    navigate('/create-group')
+  }, [navigate])
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && !loading) {
+      e.preventDefault()
+      handleJoinGroup()
+    }
+  }, [handleJoinGroup, loading])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center px-4">
@@ -57,74 +104,89 @@ const Welcome = () => {
           />
 
           <div className="space-y-4">
-            <button
-              onClick={() => setShowJoinModal(true)}
-              className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold py-4 px-6 rounded-lg hover:from-pink-600 hover:to-rose-600 transition duration-200 flex items-center justify-center gap-3"
+            <Button
+              onClick={handleOpenJoinModal}
+              fullWidth
+              size="lg"
             >
               <span className="text-2xl">🎯</span>
               <span>Join a Group</span>
-            </button>
+            </Button>
 
-            <button
-              onClick={() => navigate('/create-group')}
-              className="w-full bg-white border-2 border-gray-300 text-gray-700 font-semibold py-4 px-6 rounded-lg hover:bg-gray-50 transition duration-200 flex items-center justify-center gap-3"
+            <Button
+              variant="outline"
+              onClick={handleCreateGroup}
+              fullWidth
+              size="lg"
             >
               <span className="text-2xl">➕</span>
               <span>Create New Group</span>
-            </button>
+            </Button>
           </div>
         </Card>
 
         {/* Join Modal */}
         {showJoinModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <Card className="w-full max-w-md">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Join a Group</h2>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={handleCloseJoinModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="join-modal-title"
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <Card className="w-full max-w-md">
+                <h2 id="join-modal-title" className="text-xl font-bold text-gray-800 mb-4">
+                  Join a Group
+                </h2>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
-                  {error}
-                </div>
-              )}
+                {error && (
+                  <div className="mb-4">
+                    <ErrorMessage message={error} onDismiss={() => setError('')} />
+                  </div>
+                )}
 
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="inviteLink" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Invite Link or Code
-                  </label>
-                  <input
-                    type="text"
-                    id="inviteLink"
-                    value={inviteLink}
-                    onChange={(e) => setInviteLink(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none"
-                    placeholder="Paste invite link or enter code"
-                    autoFocus
-                  />
-                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="inviteLink" className="block text-sm font-semibold text-gray-700 mb-2">
+                      Invite Link or Code
+                    </label>
+                    <input
+                      type="text"
+                      id="inviteLink"
+                      value={inviteLink}
+                      onChange={handleInviteLinkChange}
+                      onKeyDown={handleKeyDown}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none transition-colors min-h-[44px]"
+                      placeholder="Paste invite link or enter code"
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Ask your group organizer for the invite link
+                    </p>
+                  </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowJoinModal(false)
-                      setInviteLink('')
-                      setError('')
-                    }}
-                    className="flex-1 bg-gray-100 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-200 transition duration-200"
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleJoinGroup}
-                    disabled={loading}
-                    className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold py-3 px-4 rounded-lg hover:from-pink-600 hover:to-rose-600 transition duration-200 disabled:opacity-50"
-                  >
-                    {loading ? 'Joining...' : 'Join'}
-                  </button>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={handleCloseJoinModal}
+                      disabled={loading}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleJoinGroup}
+                      loading={loading}
+                      className="flex-1"
+                    >
+                      {loading ? 'Joining...' : 'Join'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         )}
       </div>
@@ -132,4 +194,4 @@ const Welcome = () => {
   )
 }
 
-export default Welcome
+export default memo(Welcome)
