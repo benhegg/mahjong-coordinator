@@ -1,7 +1,9 @@
-import { useState, useCallback, memo } from 'react'
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
-import { auth } from '../firebase'
-import { PageHeader, Card, ErrorMessage, Button } from './common'
+import { useState, useEffect, useCallback, memo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth'
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { auth, db } from '../firebase'
+import { PageHeader, Card, ErrorMessage, Button, LoadingState } from './common'
 
 /**
  * Error messages for common Firebase auth errors
@@ -26,10 +28,70 @@ const getAuthErrorMessage = (error) => {
 
 /**
  * Login - Google OAuth sign-in page
+ * Handles authentication and redirects based on user state
  */
 const Login = () => {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
+
+  // Check if user is already signed in and redirect appropriately
+  useEffect(() => {
+    let isMounted = true
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!isMounted) return
+
+      if (!currentUser) {
+        setCheckingAuth(false)
+        return
+      }
+
+      // User is signed in - determine where to redirect
+      try {
+        // Check if user has a profile
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
+
+        if (!isMounted) return
+
+        if (!userDoc.exists()) {
+          navigate('/profile/setup', { replace: true })
+          return
+        }
+
+        // Check user's groups
+        const groupsQuery = query(
+          collection(db, 'group_members'),
+          where('user_id', '==', currentUser.uid)
+        )
+        const groupsSnapshot = await getDocs(groupsQuery)
+
+        if (!isMounted) return
+
+        const count = groupsSnapshot.size
+
+        // Route based on group count
+        if (count === 0) {
+          navigate('/welcome', { replace: true })
+        } else if (count === 1) {
+          const firstGroupId = groupsSnapshot.docs[0].data().group_id
+          navigate(`/group/${firstGroupId}`, { replace: true })
+        } else {
+          navigate('/my-groups', { replace: true })
+        }
+      } catch (err) {
+        console.error('Error checking user status:', err)
+        setError('Failed to check your account. Please try again.')
+        setCheckingAuth(false)
+      }
+    })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [navigate])
 
   const handleGoogleSignIn = useCallback(async () => {
     setError('')
@@ -37,17 +99,15 @@ const Login = () => {
 
     try {
       const provider = new GoogleAuthProvider()
-      // Add scopes if needed
       provider.addScope('email')
       provider.addScope('profile')
 
       await signInWithPopup(auth, provider)
-      // Auth state change in App.jsx will handle routing
+      // onAuthStateChanged listener above will handle routing
     } catch (err) {
       console.error('Error signing in:', err)
       const message = getAuthErrorMessage(err)
       setError(message)
-    } finally {
       setLoading(false)
     }
   }, [])
@@ -55,6 +115,11 @@ const Login = () => {
   const handleDismissError = useCallback(() => {
     setError('')
   }, [])
+
+  // Show loading while checking if user is already signed in
+  if (checkingAuth) {
+    return <LoadingState message="Checking authentication..." />
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center px-4">
