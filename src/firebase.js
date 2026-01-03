@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getMessaging, isSupported } from 'firebase/messaging'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBXxxx",
@@ -11,4 +13,17 @@ const firebaseConfig = {
 }
 
 const app = initializeApp(firebaseConfig)
+export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+// Initialize messaging only if supported
+let messaging = null
+isSupported().then(yes => {
+  if (yes) {
+    messaging = getMessaging(app)
+  }
+}).catch(() => {
+  // Messaging not supported
+})
+
+export { messaging }
