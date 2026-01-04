@@ -10,6 +10,9 @@ import ProfileSetup from './components/ProfileSetup'
 import Welcome from './components/Welcome'
 import MyGroups from './components/MyGroups'
 import GroupPage from './components/GroupPage'
+import CreateGroup from './components/CreateGroup'
+import GroupCreated from './components/GroupCreated'
+import GroupSettings from './components/GroupSettings'
 
 /**
  * Protected route wrapper with smart routing based on user state
@@ -186,7 +189,23 @@ function App() {
             path="/create-group"
             element={
               <ProtectedRoute>
-                <ComingSoon title="Create Group" />
+                <CreateGroup />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/group/:id/created"
+            element={
+              <ProtectedRoute>
+                <GroupCreated />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/group/:id/settings"
+            element={
+              <ProtectedRoute>
+                <GroupSettings />
               </ProtectedRoute>
             }
           />

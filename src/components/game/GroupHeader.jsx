@@ -1,4 +1,5 @@
 import { memo, useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { formatTime } from '../../utils/formatters'
 import { useToast } from '../common/Toast'
 
@@ -6,9 +7,11 @@ import { useToast } from '../common/Toast'
  * GroupHeader - Sticky header with group info and share button
  *
  * @param {Object} groupInfo - Group information object
- * @param {Function} onSettingsClick - Callback for settings button
+ * @param {number} memberCount - Number of members in the group
+ * @param {boolean} isAdmin - Whether current user is the group admin
  */
-const GroupHeader = memo(({ groupInfo, onSettingsClick }) => {
+const GroupHeader = memo(({ groupInfo, memberCount = 0, isAdmin = false }) => {
+  const navigate = useNavigate()
   const toast = useToast()
   const [sharing, setSharing] = useState(false)
 
@@ -49,37 +52,40 @@ const GroupHeader = memo(({ groupInfo, onSettingsClick }) => {
   }, [groupInfo, toast])
 
   const handleSettingsClick = useCallback(() => {
-    if (onSettingsClick) {
-      onSettingsClick()
-    } else {
-      toast.info('Settings coming soon!')
-    }
-  }, [onSettingsClick, toast])
+    navigate(`/group/${groupInfo.id}/settings`)
+  }, [navigate, groupInfo.id])
 
   return (
     <div className="bg-white shadow-md sticky top-0 z-10">
       <div className="max-w-2xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🀄</span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-2xl flex-shrink-0">🀄</span>
             <h1 className="text-xl font-bold text-gray-800 truncate">
               {groupInfo.name || groupInfo.group_name}
             </h1>
           </div>
-          <button
-            onClick={handleSettingsClick}
-            className="text-gray-600 hover:text-gray-800 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Group settings"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleSettingsClick}
+              className="text-gray-600 hover:text-gray-800 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0"
+              aria-label="Group settings"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
         </div>
-        <p className="text-sm text-gray-600 mb-3">
-          {groupInfo.dayOfWeek || groupInfo.day_of_week}s at {formatTime(groupInfo.time)}
-        </p>
+        <div className="flex items-center gap-3 text-sm text-gray-600 mb-3">
+          <span>{groupInfo.dayOfWeek || groupInfo.day_of_week}s at {formatTime(groupInfo.time)}</span>
+          {memberCount > 0 && (
+            <span className="bg-gray-100 px-2 py-0.5 rounded-full text-gray-700 font-medium">
+              👥 {memberCount} {memberCount === 1 ? 'member' : 'members'}
+            </span>
+          )}
+        </div>
         <button
           onClick={handleShareInvite}
           disabled={sharing}

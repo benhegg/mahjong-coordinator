@@ -129,7 +129,9 @@ const GroupPage = () => {
         name: firestoreGroup.name || firestoreGroup.group_name || 'Mahjong Group',
         dayOfWeek: firestoreGroup.day_of_week || firestoreGroup.dayOfWeek || 'Thursday',
         time: firestoreGroup.time || '19:00',
-        inviteCode: firestoreGroup.invite_code || firestoreGroup.inviteCode || groupId
+        inviteCode: firestoreGroup.invite_code || firestoreGroup.inviteCode || groupId,
+        adminId: firestoreGroup.admin_id || firestoreGroup.adminId,
+        memberCount: firestoreGroup.member_count || firestoreGroup.memberCount || 0
       }
     }
     // Fallback mock data
@@ -138,9 +140,16 @@ const GroupPage = () => {
       name: 'Thursday Night Mahjong',
       dayOfWeek: 'Thursday',
       time: '19:00',
-      inviteCode: groupId
+      inviteCode: groupId,
+      adminId: null,
+      memberCount: 0
     }
   }, [firestoreGroup, groupId])
+
+  // Check if current user is the group admin
+  const isAdmin = useMemo(() => {
+    return groupInfo.adminId === currentUserId
+  }, [groupInfo.adminId, currentUserId])
 
   // Generate games based on group info
   const [games, setGames] = useState([])
@@ -214,7 +223,7 @@ const GroupPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-      <GroupHeader groupInfo={groupInfo} />
+      <GroupHeader groupInfo={groupInfo} memberCount={groupInfo.memberCount} isAdmin={isAdmin} />
 
       {/* Games List */}
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
